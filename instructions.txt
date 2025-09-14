@@ -1,0 +1,11 @@
+below is a basic set of commands you can run to test out the functionality so far...
+
+$ git-clone init
+Initialised empty git-clone repository in /home/pluto/git-clone/.git-clone
+
+$ echo "hello" > hello.txt
+$ git-clone hash-object hello.txt
+f572d396fae9206628714fb2ce00f72e94f2258f
+
+$ git-clone cat-file f572d396fae9206628714fb2ce00f72e94f2258f
+hello
