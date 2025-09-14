@@ -1,4 +1,4 @@
-below is a basic set of commands you can run to test out the functionality so far...
+-- Below is a basic set of commands you can run to test out the basic functionality with example outputs also shown...
 
 $ git-clone init
 Initialised empty git-clone repository in /home/pluto/git-clone/.git-clone
@@ -9,3 +9,34 @@ f572d396fae9206628714fb2ce00f72e94f2258f
 
 $ git-clone cat-file f572d396fae9206628714fb2ce00f72e94f2258f
 hello
+
+-- Below is how to run the write-tree functionality...
+
+If we have a directory with two files:
+$ ls
+cats.txt    dogs.txt
+
+And we want to save the directory, first we put the individual files into the object database:
+$ git-clone hash-object cats.txt
+91a7b14a584645c7b995100223e65f8a5a33b707
+
+$ git-clone hash-object dogs.txt
+fa958e0dd2203e9ad56853a3f51e5945dad317a4
+
+Then we create a tree object with these contents:
+91a7b14a584645c7b995100223e65f8a5a33b707 cats.txt
+fa958e0dd2203e9ad56853a3f51e5945dad317a4 dogs.txt
+
+Then we put this tree object into the object database, meaning the OID of the tree object represents the entire directory.
+This is because we can first retrieve the tree object by its OID, then see all the files it contains (names and OIDs) and the read the OIDs of the files to get the raw contents of the files
+
+If a directory contains a directory, we create tree objects for them as well:
+$ ls
+cats.txt    dogs.txt    other/
+$ ls other/
+birds.txt
+
+Then this root tree will contain: 
+blob 91a7b14a584645c7b995100223e65f8a5a33b707 cats.txt
+blob fa958e0dd2203e9ad56853a3f51e5945dad317a4 dogs.txt
+tree 53891a3c27b17e0f8fd96c058f968d19e340428d other

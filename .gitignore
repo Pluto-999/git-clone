@@ -2,5 +2,8 @@ __pycache__
 *.egg-info/
 venv
 .git-clone/
-# temp test file
-hello.txt
+
+past_commands.txt
+
+# testing playground folder
+playground/

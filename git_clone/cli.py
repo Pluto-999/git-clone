@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 
+from . import base
 from . import data
 
 def main():
@@ -41,6 +42,20 @@ def parse_args():
     cat_file_parser.add_argument("object") # user must provide an object ID
 
 
+    # define the "write-tree" subcommand ("git-clone write-tree") - (tree means directory) 
+    # this command is similar to hash-object, but instead of storing an individual file, this stores a whole directory
+    write_tree_parser = commands.add_parser("write-tree")
+    write_tree_parser.set_defaults(func=write_tree)
+
+
+    # define the "read-tree" subcommand ("git-clone read-tree <tree_oid>")
+    # this command is the opposite of write-tree, in that it takes an OID of a tree and extracts it to the working directory
+    # i.e. the IOD of the tree gives us a snapshot of the file contents and writes the contents back into the working directory, potentially overriding the current contents
+    read_tree_parser = commands.add_parser("read-tree")
+    read_tree_parser.set_defaults(func=read_tree)
+    read_tree_parser.add_argument("tree")
+
+
     return parser.parse_args() # captures what the user typed
 
 # "git-clone init" command creates a new empty repository
@@ -51,10 +66,18 @@ def init(args):
 
 
 def hash_object(args):
-    with open(args.file, "rb") as f: # read the file in binary mode
+    with open(args.file, "rb") as f: # read the file in binary mode - treat the file as raw bytes rather than text
         print(data.hash_object(f.read())) # hash the file
 
 
 def cat_file(args):
     sys.stdout.flush()
-    sys.stdout.buffer.write(data.get_object(args.object)) # get the object from the given id
+    sys.stdout.buffer.write(data.get_object(args.object, expected=None)) # get the object from the given id
+
+
+def write_tree(args):
+    print(base.write_tree())
+
+
+def read_tree(args):
+    base.read_tree(args.tree)
