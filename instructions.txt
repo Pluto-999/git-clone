@@ -10,6 +10,8 @@ f572d396fae9206628714fb2ce00f72e94f2258f
 $ git-clone cat-file f572d396fae9206628714fb2ce00f72e94f2258f
 hello
 
+
+
 -- Below is how to run the write-tree functionality...
 
 If we have a directory with two files:
@@ -40,3 +42,95 @@ Then this root tree will contain:
 blob 91a7b14a584645c7b995100223e65f8a5a33b707 cats.txt
 blob fa958e0dd2203e9ad56853a3f51e5945dad317a4 dogs.txt
 tree 53891a3c27b17e0f8fd96c058f968d19e340428d other
+
+
+
+-- Below is how to run the commit functionality...
+
+We can commit with the following command, which will return the OID of that commit:
+$ git-clone commit -m "first commit test"
+3321553cfbf51eb60e303ab88896397668e16069
+
+Then we can use the cat-file command to view the contents of that commit, using the OID just produced:
+$ git-clone cat-file 3321553cfbf51eb60e303ab88896397668e16069
+tree f5a90401ed6eb63d5ff3bcae097fedbc0e7f6588
+
+first commit test
+
+We make another commit, and notice the parent in the second commit points to the first commit we made:
+$ git-clone commit -m "second commit test"
+784eedd921b916aca20ea6743366a4d27f19a697
+
+$ git-clone cat-file 784eedd921b916aca20ea6743366a4d27f19a697
+tree f5a90401ed6eb63d5ff3bcae097fedbc0e7f6588
+parent 3321553cfbf51eb60e303ab88896397668e16069
+
+second commit test
+
+Then we can use the "log" command to view all our commits so far:
+$ git-clone log
+commit 784eedd921b916aca20ea6743366a4d27f19a697
+
+    second commit test
+
+commit 3321553cfbf51eb60e303ab88896397668e16069
+
+    first commit test
+
+Optionally, we can pass in a commit OID to start from:
+$ git-clone log 3321553cfbf51eb60e303ab88896397668e16069
+commit 3321553cfbf51eb60e303ab88896397668e16069
+
+    first commit test
+
+
+-- See an explanation of the usefulness of checkout below: 
+
+For example, imagine that we're working on some code. So far, we have created a few commits, represented by a graph:
+
+o-----o-----o-----o
+^                 ^
+first commit      HEAD
+
+Then we wanted to code a new feature. We created a few commits while working on the feature (new commits represented by @):
+
+o-----o-----o-----o-----@-----@-----@
+^                                   ^
+first commit                        HEAD
+
+Now we have an alternative idea for implementing that feature. We would like to go back in time and try a different implementation, without throwing away the current implementation. We can remember the current HEAD and run git-clone checkout to go back in time, by providing the OID of the commit before the new feature was implemented (that OID can be discovered with git-clone log).
+
+o-----o-----o-----o-----@-----@-----@
+^                 ^
+first commit      HEAD
+
+The working directory will effectively go back in time. We can start working on an alternative implementation and create new commit. The new commits will be on top of HEAD and look like this (represented by $):
+
+o-----o-----o-----o-----@-----@-----@
+^                  \
+first commit        ----$-----$
+                              ^
+                              HEAD
+
+See how the history now contains two "branches". We can actually switch back and forth between them and work on them in parallel. Finally, we can checkout the preferred implementation and work from it on future code. Assuming that we liked the second branch, we'll just keep working from it, and future commits will look like this:
+
+o-----o-----o-----o-----@-----@-----@
+^                  \
+first commit        ----$-----$-----o-----o-----o-----o-----o
+                                                            ^
+                                                            HEAD
+
+
+
+-- Below is how to use the tag functionality...
+
+$ git-clone tag mytag d8d43b0e3a21df0c845e185d08be8e4028787069
+$ git-clone log refs/tags/mytag
+# Will print log of commits starting at d8d43b0e...
+
+$ git-clone checkout refs/tags/mytag
+# Will checkout commit d8d43b0e...
+
+You can also just do: 
+$ git-clone checkout mytag
+# Will again checkout commit d8d43b0e...

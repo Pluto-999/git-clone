@@ -29,3 +29,22 @@ def get_object(oid, expected="blob"):
         assert type_ == expected, f'Expected {expected}, got {type_}'
 
     return content
+
+
+# writes an OID into a ref file
+# we could have ... 
+# .git-clone/HEAD - stores the commit OID of the latest commit for the current branch
+# .git-clone/refs/tags/v1.0 - stores the commit OID for the commit we tagged as "v1.0"
+def update_ref(ref, oid):
+    ref_path = f'{GIT_DIR}/{ref}'
+    os.makedirs(os.path.dirname(ref_path), exist_ok=True)
+    with open(ref_path, "w") as f:
+        f.write(oid)
+
+
+# reads an OID from a ref file (could be HEAD or under /refs/tags/)
+def get_ref(ref):
+    ref_path = f'{GIT_DIR}/{ref}'
+    if os.path.isfile(ref_path):
+        with open(ref_path) as f:
+            return f.read().strip()

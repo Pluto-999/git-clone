@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import textwrap
 
 from . import base
 from . import data
@@ -20,6 +21,9 @@ def parse_args():
     commands.required = True
 
     
+    # using get_oid allows us to either give a ref name or raw OID hash on the CLI
+    oid = base.get_oid # reference to the get_oid function stored in "oid"
+
     # define the "init" subcommand ("git-clone init") - create new .git-clone directory
     init_parser = commands.add_parser("init")
     init_parser.set_defaults(func=init) # when "init" is used, call init function (prints hello world)
@@ -39,7 +43,7 @@ def parse_args():
     # this command is the opposite of hash-object - it will print an object by its OID 
     cat_file_parser = commands.add_parser("cat-file")
     cat_file_parser.set_defaults(func=cat_file)
-    cat_file_parser.add_argument("object") # user must provide an object ID
+    cat_file_parser.add_argument("object", type=oid) # user must provide an object ID
 
 
     # define the "write-tree" subcommand ("git-clone write-tree") - (tree means directory) 
@@ -53,8 +57,40 @@ def parse_args():
     # i.e. the IOD of the tree gives us a snapshot of the file contents and writes the contents back into the working directory, potentially overriding the current contents
     read_tree_parser = commands.add_parser("read-tree")
     read_tree_parser.set_defaults(func=read_tree)
-    read_tree_parser.add_argument("tree")
+    read_tree_parser.add_argument("tree", type=oid)
 
+
+    # define the "commit" subcommand ("git-clone commit -m "<message>"")
+    # this command will create a text file stored in the object database with the type of commit that will store:
+    # 1. a message describing the commit
+    # 2. when the snapshot was created
+    # 3. who created the snapshot
+    commit_parser = commands.add_parser("commit")
+    commit_parser.set_defaults(func=commit)
+    commit_parser.add_argument("-m", "--message", required=True)
+
+
+    # define the "log" subcommand ("git-clone log <oid>") - optional OID 
+    # this command will walk the list of all commits and print them - i.e. the entire commit history is returned
+    log_parser = commands.add_parser("log")
+    log_parser.set_defaults(func=log)
+    log_parser.add_argument("oid", type=oid, nargs="?")
+
+
+    # define the "checkout" subcommand ("git-clone checkout <oid>")
+    # this command will be given a commit OID and populate the working directory with the contents of the commit
+    # HEAD will also be moved to point to the given commit OID, meaning HEAD can be moved to any commit we wish, allowing for multiple branches of history
+    checkout_parser = commands.add_parser("checkout")
+    checkout_parser.set_defaults(func=checkout)
+    checkout_parser.add_argument("oid", type=oid)
+
+
+    # define the "tag" subcommand ("git-clone tag <name of commit> <commit OID>") - optional commit OID (defaults to HEAD)
+    # this command will associate a name to an OID so we can then use the name rather than the OID
+    tag_parser = commands.add_parser("tag")
+    tag_parser.set_defaults(func=tag)
+    tag_parser.add_argument("name")
+    tag_parser.add_argument("oid", type=oid, nargs="?")
 
     return parser.parse_args() # captures what the user typed
 
@@ -81,3 +117,28 @@ def write_tree(args):
 
 def read_tree(args):
     base.read_tree(args.tree)
+
+
+def commit(args):
+    print(base.commit(args.message))
+
+
+# starting from HEAD (latest commit) OR the given OID, we parse each commit with get_commit and print out its OID and message
+def log(args):
+    oid = args.oid or data.get_ref("HEAD")
+    while oid:
+        commit = base.get_commit(oid)
+
+        print(f'commit {oid}\n')
+        print(textwrap.indent(commit.message, "    "))
+        print("")
+
+        oid = commit.parent
+
+
+def tag(args):
+    oid = args.oid or data.get_ref("HEAD")
+    base.create_tag(args.name, oid)
+
+def checkout(args):
+    base.checkout(args.oid)

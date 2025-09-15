@@ -1,5 +1,9 @@
 import os
 from . import data
+import itertools
+import operator
+from collections import namedtuple
+import string
 
 ## this module has the basic higher-level logic of git-clone using the object database implemented in data.py
 
@@ -47,7 +51,7 @@ def _iter_tree_entries(oid):
         type_, oid, name = entry.split(" ", 2)
         yield type_, oid, name
 
-# recursively parse a given tree into a dictonary - returns a dictionary mapping file paths -> blob object IDs
+# recursively parse a given tree into a dictonary - returns a dictionary mapping: file paths -> blob object IDs
 def get_tree(oid, base_path=""):
     result = {}
     
@@ -94,6 +98,87 @@ def _empty_current_directory():
                 os.rmdir(path)
             except (FileNotFoundError, OSError):
                 pass
+
+
+# takes a messsage for the commit, then calls write_tree() for a snapshot of the current working directory, and builds a commit object (text file in object database)
+def commit(message):
+    commit = f'tree {write_tree()}\n'
+    
+    # here we use the HEAD to link this new commit being created to the previous commit (called "parent commit")
+    # the previous commit OID is saved in the "parent" key on the commit object
+    # this means we can retrieve the entire list of commits just by referencing the last commit, 
+    # as we can start from the HEAD, read the "parent" key on the HEAD commit to get the previous commit and so on - like a linked list
+    HEAD = data.get_ref("HEAD")
+    if HEAD:
+        commit += f'parent {HEAD}\n'
+
+    commit += '\n'
+    commit += f'{message}\n'
+
+    oid = data.hash_object(commit.encode(), "commit")
+
+    # update the head to set it to the OID of this current, new commit so that it can be used as the parent for the next commit
+    data.update_ref("HEAD", oid)
+
+    return oid
+
+
+Commit = namedtuple("Commit", ["tree", "parent", "message"])
+
+def get_commit(oid):
+    parent = None
+
+    # load the commit object from the object database and split it into lines
+    commit = data.get_object(oid, "commit").decode()
+    lines = iter(commit.splitlines())
+
+    for line in itertools.takewhile(operator.truth, lines):
+        key, value = line.split(" ", 1)
+        # get the tree OID
+        if key == "tree":
+            tree = value
+        # get the parent commit OID
+        elif key == "parent":
+            parent = value
+        else:
+            assert False, f'Unkown field {key}'
+
+    message = '\n'.join(lines)
+    return Commit(tree, parent, message)
+
+
+def checkout(oid):
+    commit = get_commit(oid) # get the commit referenced by the given OID
+    read_tree(commit.tree) # load the files of that commit into the current working directory
+    data.update_ref("HEAD", oid) # set the HEAD to now point to the commit OID we are checking out
+
+
+# calls update_ref which will write the given OID into the file named with the given tag
+# e.g. if we do: git-clone tag test, we create refs/tags/test which will store the OID
+def create_tag(name, oid):
+    data.update_ref(f'refs/tags/{name}', oid)
+
+
+# resolves a given name to an OID - name can be either a ref (so returns the OID the ref stores) or an OID (so returns the same OID)
+def get_oid(name):
+    refs_to_try = [
+        f'{name}', # root directory (.git-clone), meaning we can specify: "refs/tags/mytag"
+        f'refs/{name}', # .git-clone/refs, meaning we can specify: "tags/mytag"
+        f'refs/tags/{name}', # .git-clone/refs/tags, meaning we can specify: "mytag" 
+        f'refs/heads/{name}' # .git-clone/refs/heads - for a future change
+    ]
+
+    for ref in refs_to_try:
+        if data.get_ref(ref):
+            return data.get_ref(ref)
+        
+    # checkout with the raw hash OID - if the string is exactly 40 characters long and all characters are hex digits
+    is_hex = all(c in string.hexdigits for c in name)
+    if len(name) == 40 and is_hex:
+        return name
+    
+    assert False, f'Unknown name {name}'
+
 
 def is_ignored(path):
     return ".git-clone" in path.split("/")
