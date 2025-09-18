@@ -48,3 +48,15 @@ def get_ref(ref):
     if os.path.isfile(ref_path):
         with open(ref_path) as f:
             return f.read().strip()
+        
+
+# a generator function that will iterate on all available refs
+# it will return HEAD from the git-clone root directory and everything under .git-clone/refs
+def iter_refs():
+    refs = ["HEAD"]
+    for root, _, filenames in os.walk(f'{GIT_DIR}/refs/'):
+        root = os.path.relpath(root, GIT_DIR) # make the root path relative to GIT_DIR so we don't get absolute paths
+        refs.extend(f'{root}/{name}' for name in filenames)
+
+    for ref_name in refs:
+        yield ref_name, get_ref(ref_name)

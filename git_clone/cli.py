@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import textwrap
+import subprocess
 
 from . import base
 from . import data
@@ -74,7 +75,7 @@ def parse_args():
     # this command will walk the list of all commits and print them - i.e. the entire commit history is returned
     log_parser = commands.add_parser("log")
     log_parser.set_defaults(func=log)
-    log_parser.add_argument("oid", type=oid, nargs="?")
+    log_parser.add_argument("oid", default="@", type=oid, nargs="?") # default as "@" (HEAD) means we log all commits before HEAD
 
 
     # define the "checkout" subcommand ("git-clone checkout <oid>")
@@ -90,7 +91,13 @@ def parse_args():
     tag_parser = commands.add_parser("tag")
     tag_parser.set_defaults(func=tag)
     tag_parser.add_argument("name")
-    tag_parser.add_argument("oid", type=oid, nargs="?")
+    tag_parser.add_argument("oid", default="@", type=oid, nargs="?")
+
+
+    # define the "k" subcommand ("git-clone k")
+    # this command will be a visualisation tool to draw all refs and all the commits pointed by the refs
+    k_parser = commands.add_parser("k")
+    k_parser.set_defaults(func=k)
 
     return parser.parse_args() # captures what the user typed
 
@@ -123,9 +130,9 @@ def commit(args):
     print(base.commit(args.message))
 
 
-# starting from HEAD (latest commit) OR the given OID, we parse each commit with get_commit and print out its OID and message
+# starting from the given OID (to start from HEAD, we use default "@"), we parse each commit with get_commit and print out its OID and message
 def log(args):
-    oid = args.oid or data.get_ref("HEAD")
+    oid = args.oid
     while oid:
         commit = base.get_commit(oid)
 
@@ -136,9 +143,36 @@ def log(args):
         oid = commit.parent
 
 
-def tag(args):
-    oid = args.oid or data.get_ref("HEAD")
-    base.create_tag(args.name, oid)
-
 def checkout(args):
     base.checkout(args.oid)
+
+
+def tag(args):
+    base.create_tag(args.name, args.oid)
+
+
+def k(args):
+    dot = "digraph commits {\n"
+    
+    oids = set()
+    
+    # get every ref and collect the OIDs these refs point to into the oids set
+    for ref_name, ref in data.iter_refs():
+        dot += f'"{ref_name}" [shape=note]\n'
+        dot += f'"{ref_name}" -> "{ref}"\n'
+        oids.add(ref)
+
+    # traverse all commits reachable from the collected OIDs
+    for oid in base.iter_commits_and_parents(oids):
+        commit = base.get_commit(oid)
+        dot += f'"{oid}" [shape=box style=filled label="{oid[:10]}"]\n'
+        if commit.parent:
+            dot += f'"{oid}" -> "{commit.parent}"\n'
+    
+    dot += "}"
+    print(dot)
+
+    with subprocess.Popen (
+        ["dot", "-Tpng", "-o", "graph.png"],
+        stdin=subprocess.PIPE) as proc:
+            proc.communicate (dot.encode ())

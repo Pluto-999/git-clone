@@ -134,3 +134,21 @@ $ git-clone checkout refs/tags/mytag
 You can also just do: 
 $ git-clone checkout mytag
 # Will again checkout commit d8d43b0e...
+
+Note that if we do:
+$ git-clone tag testTag
+
+We have tagged our current commit as testTag, so the HEAD and testTag both has this same commit OID
+
+$ cat .git-clone/HEAD
+784eedd921b916aca20ea6743366a4d27f19a697
+
+$ cat .git-clone/refs/tags/testTag
+784eedd921b916aca20ea6743366a4d27f19a697
+
+
+-- Visualisation...
+
+We can visualise our graph of commits and tags with the command:
+$ git-clone k
+# Then open graph.png - found in the root

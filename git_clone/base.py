@@ -161,6 +161,8 @@ def create_tag(name, oid):
 
 # resolves a given name to an OID - name can be either a ref (so returns the OID the ref stores) or an OID (so returns the same OID)
 def get_oid(name):
+    if name == "@": name = "HEAD" # "@" is an alias for HEAD
+    
     refs_to_try = [
         f'{name}', # root directory (.git-clone), meaning we can specify: "refs/tags/mytag"
         f'refs/{name}', # .git-clone/refs, meaning we can specify: "tags/mytag"
@@ -172,12 +174,29 @@ def get_oid(name):
         if data.get_ref(ref):
             return data.get_ref(ref)
         
-    # checkout with the raw hash OID - if the string is exactly 40 characters long and all characters are hex digits
+    # if the string is exactly 40 characters long and all characters are hex digits, we know the given name was an OID so just return the same OID
     is_hex = all(c in string.hexdigits for c in name)
     if len(name) == 40 and is_hex:
         return name
     
     assert False, f'Unknown name {name}'
+
+
+# a generator that returns all commits it can reach from a given set of OIDs - essentially a graph traversal
+def iter_commits_and_parents(oids):
+    oids = set(oids)
+    visited = set()
+
+    while oids:
+        oid = oids.pop()
+        if not oid or oid in visited:
+            continue
+        visited.add(oid)
+        yield oid
+
+        # for each commit, follow its parent pointer to go back in history
+        commit = get_commit(oid)
+        oids.add(commit.parent)
 
 
 def is_ignored(path):
