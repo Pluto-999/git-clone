@@ -152,3 +152,52 @@ $ cat .git-clone/refs/tags/testTag
 We can visualise our graph of commits and tags with the command:
 $ git-clone k
 # Then open graph.png - found in the root
+
+
+-- Below is the explanation of the branch command...
+
+When we checkout a branch by name, we update HEAD to point to the name of the branch 
+e.g...
+o-----o-----o-----o-----o-----o-----o (OID 789de...)
+                   \                ^
+                    ----o-----o   branch2
+                              ^
+                           branch1
+
+Running git-clone checkout branch2 will create the following situtation:
+o-----o-----o-----o-----o-----o-----o (OID 789de...)
+                   \                ^
+                    ----o-----o   branch2 <--- HEAD
+                              ^
+                           branch1
+
+HEAD points to branch2 rather than the OID of the commit directly, such that if we create another commit, git-clone updates HEAD to point to the latest commit as well as updating branch2 to point to the latest commit
+o-----o-----o-----o-----o-----o-----o-----o (OID 789de...)
+                   \                      ^
+                    ----o-----o        branch2 <--- HEAD
+                              ^
+                            branch1
+
+Note that we can checkout that same branch2 commit by its OID (git-clone checkout <789de...>) rather than (git-clone checkout branch2), meaning HEAD will now point directly to OID 789de...
+
+o-----o-----o-----o-----o-----o-----O (789de...)
+                   \                ^
+                    ----o---o    branch2,HEAD
+                            ^
+                         branch1
+
+This means the physical value of HEAD is "789de...", and now commits will not advance branch2, only HEAD will advance:
+
+o-----o-----o-----o-----o-----o-----O-----o
+                   \                ^     ^
+                    ----o---o    branch2  HEAD
+                            ^
+                         branch1
+
+This is a detached HEAD situation, meaning that if we do git-clone checkout branch1, no refs will point to our latest commit after branch2, so we will need to know its OID in order to retrieve it, otherwise we have a lost commit
+
+o-----o-----o-----o-----o-----o-----O-----o
+                   \                ^
+                    ----o---o    branch2
+                            ^
+                         branch1 <--- HEAD

@@ -78,12 +78,15 @@ def parse_args():
     log_parser.add_argument("oid", default="@", type=oid, nargs="?") # default as "@" (HEAD) means we log all commits before HEAD
 
 
-    # define the "checkout" subcommand ("git-clone checkout <oid>")
-    # this command will be given a commit OID and populate the working directory with the contents of the commit
-    # HEAD will also be moved to point to the given commit OID, meaning HEAD can be moved to any commit we wish, allowing for multiple branches of history
+    # define the "checkout" subcommand ("git-clone checkout <commit>")
+    # this command will be given either a branch name, a tag or a raw commit OID 
+    # it will populate the working directory with the contents of that commit
+    # HEAD will be updated such that:
+    #   - if a branch name is given, HEAD becomes a symbolic ref to that branch
+    #   - if a tag or OID is given, HEAD is directly set to that OID (non-symbolic, detached HEAD)
     checkout_parser = commands.add_parser("checkout")
     checkout_parser.set_defaults(func=checkout)
-    checkout_parser.add_argument("oid", type=oid)
+    checkout_parser.add_argument("commit")
 
 
     # define the "tag" subcommand ("git-clone tag <name of commit> <commit OID>") - optional commit OID (defaults to HEAD)
@@ -99,12 +102,20 @@ def parse_args():
     k_parser = commands.add_parser("k")
     k_parser.set_defaults(func=k)
 
+
+    # define the "branch" subcommand ("git-clone branch <name of branch> <start point of branch>") - optional start point (defaults to HEAD)
+    # this command will 
+    branch_parser = commands.add_parser("branch")
+    branch_parser.set_defaults(func=branch)
+    branch_parser.add_argument("name")
+    branch_parser.add_argument("start_point", default="@", type=oid, nargs="?")
+
     return parser.parse_args() # captures what the user typed
 
 # "git-clone init" command creates a new empty repository
 # repo data is stored locally in a subdirectory called .git (or in this case, .git-clone)
 def init(args):
-    data.init() 
+    base.init() 
     print (f'Initialised empty git-clone repository in {os.getcwd()}/{data.GIT_DIR}')
 
 
@@ -132,19 +143,16 @@ def commit(args):
 
 # starting from the given OID (to start from HEAD, we use default "@"), we parse each commit with get_commit and print out its OID and message
 def log(args):
-    oid = args.oid
-    while oid:
+    for oid in base.iter_commits_and_parents({args.oid}):
         commit = base.get_commit(oid)
 
         print(f'commit {oid}\n')
         print(textwrap.indent(commit.message, "    "))
         print("")
 
-        oid = commit.parent
-
 
 def checkout(args):
-    base.checkout(args.oid)
+    base.checkout(args.commit)
 
 
 def tag(args):
@@ -157,10 +165,11 @@ def k(args):
     oids = set()
     
     # get every ref and collect the OIDs these refs point to into the oids set
-    for ref_name, ref in data.iter_refs():
+    for ref_name, ref in data.iter_refs(deref=False):
         dot += f'"{ref_name}" [shape=note]\n'
-        dot += f'"{ref_name}" -> "{ref}"\n'
-        oids.add(ref)
+        dot += f'"{ref_name}" -> "{ref.value}"\n'
+        if not ref.symbolic:
+            oids.add(ref.value)
 
     # traverse all commits reachable from the collected OIDs
     for oid in base.iter_commits_and_parents(oids):
@@ -176,3 +185,8 @@ def k(args):
         ["dot", "-Tpng", "-o", "graph.png"],
         stdin=subprocess.PIPE) as proc:
             proc.communicate (dot.encode ())
+
+
+def branch(args):
+    base.create_branch(args.name, args.start_point)
+    print(f'Branch {args.name} created at {args.start_point[:10]}')

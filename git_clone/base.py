@@ -2,11 +2,17 @@ import os
 from . import data
 import itertools
 import operator
-from collections import namedtuple
+from collections import deque, namedtuple
 import string
 
 ## this module has the basic higher-level logic of git-clone using the object database implemented in data.py
 
+
+# HEAD points to ref/heads/main so that the repository has an initial branch called main
+# otherwise, a fresh git-clone repo would have started in detached HEAD
+def init():
+    data.init()
+    data.update_ref("HEAD", data.RefValue(symbolic=True, value="refs/heads/main"))
 
 # creates a tree object that records the names of entries, their types and the object ID's of these entries
 def write_tree(directory="."):
@@ -108,7 +114,7 @@ def commit(message):
     # the previous commit OID is saved in the "parent" key on the commit object
     # this means we can retrieve the entire list of commits just by referencing the last commit, 
     # as we can start from the HEAD, read the "parent" key on the HEAD commit to get the previous commit and so on - like a linked list
-    HEAD = data.get_ref("HEAD")
+    HEAD = data.get_ref("HEAD").value
     if HEAD:
         commit += f'parent {HEAD}\n'
 
@@ -118,7 +124,7 @@ def commit(message):
     oid = data.hash_object(commit.encode(), "commit")
 
     # update the head to set it to the OID of this current, new commit so that it can be used as the parent for the next commit
-    data.update_ref("HEAD", oid)
+    data.update_ref("HEAD", data.RefValue(symbolic=False, value=oid))
 
     return oid
 
@@ -147,16 +153,24 @@ def get_commit(oid):
     return Commit(tree, parent, message)
 
 
-def checkout(oid):
+def checkout(name):
+    oid = get_oid(name)
     commit = get_commit(oid) # get the commit referenced by the given OID
     read_tree(commit.tree) # load the files of that commit into the current working directory
-    data.update_ref("HEAD", oid) # set the HEAD to now point to the commit OID we are checking out
+    # data.update_ref("HEAD", data.RefValue(symbolic=False, value=oid)) # set the HEAD to now point to the commit OID we are checking out
+
+    if is_branch(name):
+        HEAD = data.RefValue(symbolic=True, value=f'refs/heads/{name}')
+    else:
+        HEAD = data.RefValue(symbolic=False, value=oid)
+    
+    data.update_ref("HEAD", HEAD, deref=False)
 
 
 # calls update_ref which will write the given OID into the file named with the given tag
 # e.g. if we do: git-clone tag test, we create refs/tags/test which will store the OID
 def create_tag(name, oid):
-    data.update_ref(f'refs/tags/{name}', oid)
+    data.update_ref(f'refs/tags/{name}', data.RefValue(symbolic=False, value=oid))
 
 
 # resolves a given name to an OID - name can be either a ref (so returns the OID the ref stores) or an OID (so returns the same OID)
@@ -171,8 +185,8 @@ def get_oid(name):
     ]
 
     for ref in refs_to_try:
-        if data.get_ref(ref):
-            return data.get_ref(ref)
+        if data.get_ref(ref, deref=False).value:
+            return data.get_ref(ref).value
         
     # if the string is exactly 40 characters long and all characters are hex digits, we know the given name was an OID so just return the same OID
     is_hex = all(c in string.hexdigits for c in name)
@@ -184,11 +198,11 @@ def get_oid(name):
 
 # a generator that returns all commits it can reach from a given set of OIDs - essentially a graph traversal
 def iter_commits_and_parents(oids):
-    oids = set(oids)
+    oids = deque(oids)
     visited = set()
 
     while oids:
-        oid = oids.pop()
+        oid = oids.popleft()
         if not oid or oid in visited:
             continue
         visited.add(oid)
@@ -196,7 +210,16 @@ def iter_commits_and_parents(oids):
 
         # for each commit, follow its parent pointer to go back in history
         commit = get_commit(oid)
-        oids.add(commit.parent)
+        oids.appendleft(commit.parent)
+
+
+# creates a new file in the heads directory that contains the commit OID the branch "name" should point to
+def create_branch(name, oid):
+    data.update_ref(f'refs/heads/{name}', data.RefValue(symbolic=False, value=oid))
+
+
+def is_branch(branch):
+    return data.get_ref(f'refs/heads/{branch}').value is not None
 
 
 def is_ignored(path):
