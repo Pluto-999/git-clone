@@ -222,5 +222,23 @@ def is_branch(branch):
     return data.get_ref(f'refs/heads/{branch}').value is not None
 
 
+def get_branch_name():
+    HEAD = data.get_ref("HEAD", deref=False)
+    if not HEAD.symbolic:
+        return None
+    HEAD = HEAD.value
+    assert HEAD.startswith("refs/heads/")
+    return os.path.relpath(HEAD, "refs/heads")
+
+
+# iterate over all the branches - we use iter_refs as branches are just refs that live under refs/heads/ so we pass in this prefix
+def iter_branch_names():
+    for refname, _ in data.iter_refs("refs/heads/"):
+        yield os.path.relpath(refname, "refs/heads")
+
+
+def reset(oid):
+    data.update_ref("HEAD", data.RefValue(symbolic=False, value=oid))
+
 def is_ignored(path):
     return ".git-clone" in path.split("/")

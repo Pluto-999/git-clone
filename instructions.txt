@@ -201,3 +201,62 @@ o-----o-----o-----o-----o-----o-----O-----o
                     ----o---o    branch2
                             ^
                          branch1 <--- HEAD
+
+
+-- Below is an explanation of the reset command...
+
+If we have the below situation:
+        
+       7fa39...  ac120...
+            v     v
+o-----o-----o-----o
+                  ^
+                 main <--- HEAD
+
+We can then run the following command to undo commit ac120:
+$ git-clone reset 7fa39
+
+       7fa39...  ac120...
+            v     v
+o-----o-----o-----o
+            ^
+           main <--- HEAD
+
+Therefore main now points to 7fa39, effectively erasing the latest ac120 commit, such that we can make another commit to get:
+
+       7fa39...  ac120...
+            v     v
+o-----o-----o-----o
+             \
+              ----o
+                  ^
+                 main <--- HEAD
+
+Note that checkout is different from reset, as if we were to use checkout in our previous scenario, we would have:
+
+       7fa39...  ac120...
+            v     v
+o-----o-----o-----o
+            ^     ^
+          HEAD   main
+
+This is because checkout moves HEAD without dereferencing it, leaving main at the ac120 commit - therefore reset will move the actual branch and not just the HEAD
+
+
+-- Below is an explanation of the show command:
+
+The show command is used to show the differences between the given commit and it's parent commit (the previous commit).
+If we give no commit OID, it will default to HEAD
+
+e.g.:
+$ git-clone show
+commit 3f39f597f57210c3799282c84cfb303d031d5653 
+
+    change cat
+
+--- a/cats.txt
++++ b/cats.txt
+@@ -1 +1 @@
+-meow
++meow meow
+Binary files a/graph.png and b/graph.png differ

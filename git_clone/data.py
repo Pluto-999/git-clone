@@ -95,12 +95,13 @@ def _get_ref_internal(ref, deref):
 
 
 # a generator function that will iterate on all available refs
-# it will return HEAD from the git-clone root directory and everything under .git-clone/refs
-def iter_refs(deref=True):
+def iter_refs(prefix="", deref=True):
     refs = ["HEAD"]
     for root, _, filenames in os.walk(f'{GIT_DIR}/refs/'):
         root = os.path.relpath(root, GIT_DIR) # make the root path relative to GIT_DIR so we don't get absolute paths
         refs.extend(f'{root}/{name}' for name in filenames)
 
     for ref_name in refs:
+        if not ref_name.startswith(prefix):
+            continue
         yield ref_name, get_ref(ref_name, deref=deref)

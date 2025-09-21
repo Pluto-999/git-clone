@@ -3,9 +3,9 @@ import os
 import sys
 import textwrap
 import subprocess
-
 from . import base
 from . import data
+from . import diff
 
 def main():
     args = parse_args()
@@ -103,12 +103,33 @@ def parse_args():
     k_parser.set_defaults(func=k)
 
 
-    # define the "branch" subcommand ("git-clone branch <name of branch> <start point of branch>") - optional start point (defaults to HEAD)
-    # this command will 
+    # define the "branch" subcommand ("git-clone branch <name of branch> <start point of branch>") - optional name (defaults to listing all branches) and optional start point (defaults to HEAD)
+    # creating a new branch means creating a new file in the refs/heads directory of the given name which will contain the OID of the commit the branch currently points to
     branch_parser = commands.add_parser("branch")
     branch_parser.set_defaults(func=branch)
-    branch_parser.add_argument("name")
+    branch_parser.add_argument("name", nargs="?")
     branch_parser.add_argument("start_point", default="@", type=oid, nargs="?")
+
+
+    # define the "status" subcommand ("git-clone status")
+    # this command will print useful informations about the current, working directory
+    status_parser = commands.add_parser("status")
+    status_parser.set_defaults(func=status)
+
+
+    # define the "reset" subcommand ("git-clone reset <commit OID>")
+    # this command will move HEAD to point at the given commit OID
+    reset_parser = commands.add_parser("reset")
+    reset_parser.set_defaults(func=reset)
+    reset_parser.add_argument("commit", type=oid)
+
+
+    # define the "show" subcommand ("git-clone show <OID>") - optional OID (defaults to HEAD)
+    # this command will print a commit object showing the commit message and the textual diff from the last commit
+    show_parser = commands.add_parser("show")
+    show_parser.set_defaults(func=show)
+    show_parser.add_argument("oid", default="@", type=oid, nargs="?")
+
 
     return parser.parse_args() # captures what the user typed
 
@@ -141,14 +162,24 @@ def commit(args):
     print(base.commit(args.message))
 
 
-# starting from the given OID (to start from HEAD, we use default "@"), we parse each commit with get_commit and print out its OID and message
+def _print_commit(oid, commit, refs=None):
+    refs_str = f'({", ".join(refs)})' if refs else ""
+    print(f'commit {oid} {refs_str}\n')
+    print(textwrap.indent(commit.message, "    "))
+    print("")
+
+
+# starting from the given OID (to start from HEAD, we use default "@"), we parse each commit with get_commit
+# we then print out its OID, message and all the refs that point to that commit
 def log(args):
+    refs = {}
+    for refname, ref in data.iter_refs():
+        refs.setdefault(ref.value, []).append(refname)
+    
     for oid in base.iter_commits_and_parents({args.oid}):
         commit = base.get_commit(oid)
 
-        print(f'commit {oid}\n')
-        print(textwrap.indent(commit.message, "    "))
-        print("")
+        _print_commit(oid, commit, refs.get(oid))
 
 
 def checkout(args):
@@ -188,5 +219,45 @@ def k(args):
 
 
 def branch(args):
-    base.create_branch(args.name, args.start_point)
-    print(f'Branch {args.name} created at {args.start_point[:10]}')
+    # if we don't give a branch name, we just want to list out all the branches
+    if not args.name:
+        current = base.get_branch_name()
+        for branch in base.iter_branch_names():
+            prefix = "*" if branch == current else " "
+            print(f'{prefix} {branch}')
+
+    else:
+        base.create_branch(args.name, args.start_point)
+        print(f'Branch {args.name} created at {args.start_point[:10]}')
+
+
+def status(args):
+    HEAD = base.get_oid("@")
+    branch = base.get_branch_name()
+    if branch:
+        print(f'On branch {branch}')
+    else:
+        print(f'HEAD detached at {HEAD[:10]}')
+
+
+def show(args):
+    if not args.oid:
+        return
+    
+    commit = base.get_commit(args.oid)
+    parent_tree = None
+    if commit.parent:
+        parent_tree = base.get_commit(commit.parent).tree
+    
+    _print_commit(args.oid, commit)
+
+    result = diff.diff_trees(
+        base.get_tree(parent_tree), base.get_tree(commit.tree)
+    )
+    
+    sys.stdout.flush()
+    sys.stdout.buffer.write(result)
+
+
+def reset(args):
+    base.reset(args.commit)
